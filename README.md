@@ -1,5 +1,40 @@
 # Pixel-Perfect Structure-from-Motion
 
+
+
+## Catid fixes for 9/10/2023
+
+This repo incorporates small fixes to get it working.
+
+```
+git clone https://github.com/catid/pixel-perfect-sfm
+cd pixel-perfect-sfm
+git submodule update --init --recursive
+
+conda activate hloc <- activate the environment you want to inject this into
+pip install -e .
+```
+
+In order to get this to work I had to edit the COLMAP installed scripts.  Maybe try without doing this first in case someone fixed it.  I edited this file:
+
+```
+sudo vi /usr/local/share/colmap/cmake/FindDependencies.cmake
+```
+
+To set the default architecture, which seems to be missing from the Python wheel build:
+
+```
+if(CUDA_ENABLED AND CUDA_FOUND)
+    set(CMAKE_CUDA_ARCHITECTURES "native")    <- add this line
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        message(
+            FATAL_ERROR "You must set CMAKE_CUDA_ARCHITECTURES to e.g. 'native', 'all-major', '70', etc. "
+            "More information at https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html")
+    endif()
+```
+
+
+
 ### Best student paper award @ [ICCV 2021](http://iccv2021.thecvf.com/)
 
 We introduce a framework that **improves the accuracy of Structure-from-Motion (SfM) and visual localization** by refining keypoints, camera poses, and 3D points using the direct alignment of deep features. It is presented in our paper:
