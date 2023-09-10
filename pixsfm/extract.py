@@ -10,6 +10,8 @@ from .features.extractor import FeatureExtractor
 from .util.misc import check_memory
 from . import logger
 
+from concurrent.futures import ThreadPoolExecutor
+
 type_to_np = {"double": np.float64,
               "float": np.float32,
               "half": np.float16}
@@ -54,6 +56,20 @@ def estimate_required_memory(
                                                     num_kps)
     return req_memory
 
+def process_image(image_data):
+    image_name = image_data["image_name"]
+    keypoints = image_data["keypoints"]
+    req_keypoint_ids = image_data["req_keypoint_ids"]
+    extractor = image_data["extractor"]
+    image_dir = image_data["image_dir"]
+
+    keypoints_i, keypoint_ids_i, num_kps_i = get_keypoints_and_ids(
+        image_name, keypoints, req_keypoint_ids)
+    if num_kps_i == 0:
+        return None
+    feature_maps = extractor(image_dir / image_name, keypoints_i, keypoint_ids_i)
+    del keypoint_ids_i, keypoints_i
+    return image_name, feature_maps
 
 def features_from_image_list(
         extractor: FeatureExtractor,
@@ -63,7 +79,8 @@ def features_from_image_list(
         req_keypoint_ids: dict = None,
         cache_path: Path = None,
         estimate_memory: bool = True,
-        level_prefix: str = ""):
+        level_prefix: str = "",
+        max_workers=2):
     f_conf = extractor.conf
     # If matched_keypoint_dict not provided but sparse=True, we extract all kp.
     if (keypoints is None and f_conf.sparse):
@@ -103,13 +120,25 @@ def features_from_image_list(
             set_grps.append(cache_file.create_group(level_prefix + str(i)))
         cache_file.close()
     extractor.model.to(extractor.device)
-    for image_name in tqdm(image_list):
-        keypoints_i, keypoint_ids_i, num_kps_i = get_keypoints_and_ids(
-            image_name, keypoints, req_keypoint_ids)
-        if num_kps_i == 0:
-            continue
-        feature_maps = extractor(image_dir / image_name, keypoints_i,
-                                 keypoint_ids_i)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        args_list = []
+        for image_name in image_list:
+            image_data = {
+                "image_name": image_name,
+                "keypoints": keypoints,
+                "req_keypoint_ids": req_keypoint_ids,
+                "extractor": extractor,
+                "image_dir": image_dir,
+            }
+            args_list.append(image_data)
+
+        results = list(tqdm(executor.map(process_image, args_list), total=len(args_list)))
+
+    # Filter out None results
+    results = [r for r in results if r is not None]
+
+    for image_name, feature_maps in results:
         for level_id, feature_map in enumerate(feature_maps):
             if f_conf.use_cache:
                 # We need to reopen the cache file to limit RAM requirements
@@ -137,7 +166,7 @@ def features_from_image_list(
                         feature_map["metadata"]
                     )
                 )
-        del keypoint_ids_i, keypoints_i
+
     if f_conf.use_cache:
         # Load only metadata
         # cache_file.close()
@@ -145,6 +174,7 @@ def features_from_image_list(
             dtype_to_fm[f_conf["dtype"]](str(cache_path),
                                          f_conf.load_cache_on_init,
                                          level_prefix)
+
     # free GPU resources
     extractor.model.to("cpu")
     return feature_manager
@@ -155,7 +185,8 @@ def features_from_reconstruction(
         reconstruction: pycolmap.Reconstruction,
         image_dir: Path,
         cache_path: Path = None,
-        estimate_memory: bool = True):
+        estimate_memory: bool = True,
+        max_workers = 2):
 
     image_list = []
     keypoints_dict = {}
@@ -190,7 +221,8 @@ def features_from_reconstruction(
         keypoints=keypoints_dict,
         req_keypoint_ids=keypoint_ids_dict,
         cache_path=cache_path,
-        estimate_memory=estimate_memory
+        estimate_memory=estimate_memory,
+        max_workers=max_workers,
     )
 
 
@@ -200,7 +232,8 @@ def features_from_graph(
         graph: base.Graph,
         keypoints_dict=None,
         cache_path: Path = None,
-        estimate_memory: bool = True):
+        estimate_memory: bool = True,
+        max_workers = 2):
     # Ids of matched keypoints per image, a dictionary
     matched_keypoint_ids = ka.extract_patchdata_from_graph(graph)
 
@@ -211,7 +244,8 @@ def features_from_graph(
         keypoints=keypoints_dict,
         req_keypoint_ids=matched_keypoint_ids,
         cache_path=cache_path,
-        estimate_memory=estimate_memory
+        estimate_memory=estimate_memory,
+        max_workers=max_workers,
     )
 
 
