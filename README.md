@@ -36,6 +36,20 @@ make -j20
 sudo make install
 ```
 
+
+## Requires pycolmap v0.4.0
+
+```
+git clone https://github.com/colmap/pycolmap.git
+cd pycolmap
+git checkout v0.4.0
+git submodule update --init --recursive
+
+conda activate hloc <- activate the environment you want to inject this into
+pip install -e .
+```
+
+
 ## Install Pixel Perfect SfM in a conda environment
 
 ```
