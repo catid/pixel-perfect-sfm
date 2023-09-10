@@ -6,6 +6,38 @@
 
 This repo incorporates small fixes to get it working.
 
+
+## Requires COLMAP 3.8 with CUDA support
+
+To run the `colmap patch_match_stereo` command you'll need to install colmap from source from https://github.com/colmap/colmap with CUDA support.
+
+Newer master version of colmap does not work with Pixel Perfect SfM so we must use the last stable release 3.8.
+
+I needed to install the following Ubuntu packages and set a config option to build COLMAP:
+
+```
+sudo apt install -y libboost-all-dev libeigen3-dev libflann-dev libsqlite3-dev libopengl-dev libglx-dev libgl-dev libceres-dev libcgal-dev libglew-dev libfreeimage-dev libmetis-dev
+
+sudo apt install -y qtcreator qtbase5-dev qt5-qmake cmake
+
+git clone https://github.com/colmap/colmap.git
+
+cd colmap
+git checkout 3.8
+git submodule update --init --recursive
+
+mkdir build
+cd build
+
+cmake -DCMAKE_CUDA_ARCHITECTURES=native -DCMAKE_BUILD_TYPE=Release ..
+
+make -j20
+
+sudo make install
+```
+
+## Install Pixel Perfect SfM in a conda environment
+
 ```
 git clone https://github.com/catid/pixel-perfect-sfm
 cd pixel-perfect-sfm
